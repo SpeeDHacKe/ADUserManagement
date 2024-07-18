@@ -1,0 +1,27 @@
+﻿@model ADUserManagement.Models.IndexModel
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LOGIPROTECH API</title>
+</head>
+<body>
+    <div class="container body-content">
+        <div id="myCarousel" class="carousel slide" data-ride="carousel" data-interval="6000">
+            <p style="color:black;font-family:Calibri;font-size:medium">@String.Format("IP: {0}", Model.IP)</p>
+            <p style="color:black;font-family:Calibri;font-size:medium">@String.Format("Name: {0}({1})", Model.AssemblyName, Model.AspNetCoreEnvironment)</p>
+            <p style="color:black;font-family:Calibri;font-size:medium">@String.Format("Version: {0} ({1})", Model.AssemblyVersion, Model.DateModified)</p>
+        </div>
+    </div>
+    <hr />
+    <footer>
+        <p>&copy; @DateTime.Now.ToString("yyyy", new System.Globalization.CultureInfo("en-EN", false)) - @Model.AssemblyName [.Net Version: @Environment.Version?.ToString()]</p>
+    </footer>
+</body>
+</html>

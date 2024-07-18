@@ -67,52 +67,105 @@ namespace ADUserManagement.Services
 
         private void ModifyUserAccountControl(string username, string domainName, int accountControlFlag)
         {
-            var domainConf = _configuration.GetSection("Domains").Get<DomainConfigModel[]>()?.Where(x => x.DomainName.ToLower().Equals(domainName.ToLower())).FirstOrDefault();
-            if (domainConf != null)
+            var domains = _configuration.GetSection("Domains").Get<DomainConfigModel[]>();
+            foreach (var domainConfig in domains)
             {
-                using (var entry = new DirectoryEntry($"LDAP://{domainName}/{username}", domainConf.Username, domainConf.Password))
+                if (domainConfig.DomainName == domainName)
                 {
-                    // Get the current user account control
-                    int userAccountControl = (int)entry.Properties["userAccountControl"].Value;
+                    using (var entry = new DirectoryEntry($"LDAP://{domainName}/{username}", domainConfig.Username, domainConfig.Password))
+                    {
+                        // Get the current user account control
+                        int userAccountControl = (int)entry.Properties["userAccountControl"].Value;
 
-                    // Modify the user account control
-                    userAccountControl = (userAccountControl & ~0x0002) | accountControlFlag; // Disable or enable the account
+                        // Modify the user account control
+                        userAccountControl = (userAccountControl & ~0x0002) | accountControlFlag; // Disable or enable the account
 
-                    entry.Properties["userAccountControl"].Value = userAccountControl;
-                    entry.CommitChanges();
+                        entry.Properties["userAccountControl"].Value = userAccountControl;
+                        entry.CommitChanges();
+                    }
+                    Console.WriteLine($"User {username} has been " + (accountControlFlag == 0x0002 ? "locked." : "unlocked."));
+                    return;
                 }
-                Console.WriteLine($"User {username} has been " + (accountControlFlag == 0x0002 ? "locked." : "unlocked."));
-                return;
             }
-            else
-            {
-                Console.WriteLine("Domain or user not found.");
-                return;
-            }
-
-
-            ////----- Current Code -----////
-            //var domains = _configuration.GetSection("Domains").Get<DomainConfigModel[]>();
-            //foreach (var domainConfig in domains)
-            //{
-            //    if (domainConfig.DomainName == domainName)
-            //    {
-            //        using (var entry = new DirectoryEntry($"LDAP://{domainName}/{username}", domainConfig.Username, domainConfig.Password))
-            //        {
-            //            // Get the current user account control
-            //            int userAccountControl = (int)entry.Properties["userAccountControl"].Value;
-
-            //            // Modify the user account control
-            //            userAccountControl = (userAccountControl & ~0x0002) | accountControlFlag; // Disable or enable the account
-
-            //            entry.Properties["userAccountControl"].Value = userAccountControl;
-            //            entry.CommitChanges();
-            //        }
-            //        Console.WriteLine($"User {username} has been " + (accountControlFlag == 0x0002 ? "locked." : "unlocked."));
-            //        return;
-            //    }
-            //}
-            //Console.WriteLine("Domain or user not found.");
+            Console.WriteLine("Domain or user not found.");
         }
+
+        #region Function Async
+        public async Task<ResponseModel> LockUserAsync(string username, string domainName)
+        {
+            return await ModifyUserAccountControlAsync(username, domainName, 0x0002); // 0x0002 = ACCOUNTDISABLE
+        }
+
+        public async Task<ResponseModel> UnlockUserAsync(string username, string domainName)
+        {
+            return await ModifyUserAccountControlAsync(username, domainName, 0x0000); // 0x0000 = Account enabled
+        }
+        public async Task<ResponseModel> ChangePasswordAsync(string username, string domainName, string newPassword)
+        {
+            var returnResponse = new ResponseModel();
+            try
+            {
+                var domainConfig = _configuration.GetSection("Domains").Get<DomainConfigModel[]>()?.Where(x => x.DomainName.ToLower().Equals(domainName.ToLower())).FirstOrDefault();
+                if (domainConfig != null)
+                {
+                    using (var entry = new DirectoryEntry($"LDAP://{domainName}/{username}", domainConfig.Username, domainConfig.Password))
+                    {
+                        entry.Invoke("SetPassword", new object[] { newPassword });
+                        entry.CommitChanges();
+                    }
+                    returnResponse.status = 200;
+                    returnResponse.success = true;
+                    returnResponse.message = $"Password for user {username} has been changed.";
+                }
+                else
+                {
+                    returnResponse.status = 400;
+                    returnResponse.message = $"Domain or user not found.";
+                }
+            }
+            catch (Exception ex)
+            {
+                returnResponse.status = 503;
+                returnResponse.message = $"{ex.Message} | Inner: {ex?.InnerException?.Message}";
+            }
+            return await Task.FromResult(returnResponse);
+        }
+        private async Task<ResponseModel> ModifyUserAccountControlAsync(string username, string domainName, int accountControlFlag)
+        {
+            var returnResponse = new ResponseModel();
+            try
+            {
+                var domainConfig = _configuration.GetSection("Domains").Get<DomainConfigModel[]>()?.Where(x => x.DomainName.ToLower().Equals(domainName.ToLower())).FirstOrDefault();
+                if (domainConfig != null)
+                {
+                    using (var entry = new DirectoryEntry($"LDAP://{domainName}/{username}", domainConfig.Username, domainConfig.Password))
+                    {
+                        // Get the current user account control
+                        int userAccountControl = (int)entry.Properties["userAccountControl"].Value;
+
+                        // Modify the user account control
+                        userAccountControl = (userAccountControl & ~0x0002) | accountControlFlag; // Disable or enable the account
+
+                        entry.Properties["userAccountControl"].Value = userAccountControl;
+                        entry.CommitChanges();
+                    }
+                    returnResponse.status = 200;
+                    returnResponse.success = true;
+                    returnResponse.message = $"User {username} has been " + (accountControlFlag == 0x0002 ? "locked." : "unlocked.");
+                }
+                else
+                {
+                    returnResponse.status = 400;
+                    returnResponse.message = $"Domain or user not found.";
+                }
+            }
+            catch (Exception ex)
+            {
+                returnResponse.status = 503;
+                returnResponse.message = $"{ex.Message} | Inner: {ex?.InnerException?.Message}";
+            }
+            return await Task.FromResult(returnResponse);
+        }
+        #endregion Function Async
     }
 }
